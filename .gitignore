@@ -1,0 +1,14 @@
+# Ignore virtual envs
+.venv/
+
+# Ignore macOS files
+.DS_Store
+
+# Ignore data outputs
+Run-03/01--to-process/_scraped_text/
+*.csv
+*.xlsx
+
+# Ignore Python cache
+__pycache__/
+*.pyc
