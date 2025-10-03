@@ -12,3 +12,11 @@ Run-03/01--to-process/_scraped_text/
 # Ignore Python cache
 __pycache__/
 *.pyc
+
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+Run-03/01--to-process/_scraped_text/
+*.csv
+*.xlsx
