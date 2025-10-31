@@ -5,20 +5,22 @@ import json
 import pathlib
 from typing import List, Dict, Any
 from openai import OpenAI, RateLimitError, APIError
+from dotenv import load_dotenv
 
-# ========= CONFIG =========
+load_dotenv()  # .env 로드
+
+# ===== BASE DIRECTORY =====
 BASE_DIR = pathlib.Path(__file__).parent
 
-TXT_BASE = BASE_DIR / "Run-03" / "01--to-process" / "_scraped_text"
-OUTPUT_CSV = BASE_DIR / "Run-03" / "fsi_filter_results.csv"
+# ========= CONFIG =========
+TXT_BASE = BASE_DIR / "Run-04" / "01--to-process" / "_scraped_text"
+OUTPUT_CSV = BASE_DIR / "Run-04-2ndFilteringImproved" / "fsi_filter_results_improved.csv"
 
 MODEL = "gpt-4o-mini"      # use 'gpt-4o' if you want maximum quality
 MAX_CHARS = 12000          # read up to this many chars per page (most sites fit)
 MAX_RETRIES = 5
 BACKOFF_BASE = 2.0
 PAUSE_BETWEEN_FILES = 0.2
-
-# If pages are very long and you want deeper reading, increase MAX_CHARS to ~20000.
 
 # ========= PROMPT (British English, your exact criteria) =========
 INSTRUCTIONS = """
@@ -39,6 +41,11 @@ A website should not be classified as an FSI if:
 2) It belongs to a media outlet, advocacy group, or municipality that only introduces/promotes FSIs, rather than running them.
 3) It describes food-related activities but the website’s main purpose is unrelated to food sharing (e.g., political movement, general community activism, or a commercial site).
 4) The initiative is mentioned only indirectly through an external article or story, with no direct ownership or representation on the site.
+5) Institutional, educational, or cultural projects (such as museums, schools, or research centres) that only *host*, *exhibit*, or *collaborate on* food-related events, without being dedicated food-sharing initiatives.
+6) Crowdfunding or fundraising platforms (e.g. YouBeHero, Crowdfunder, Produzioni dal Basso) where FSIs are *listed* as causes but the websites themselves do not *run* any food-sharing activity.
+7) Media or publication sites (magazines, newspapers, blogs) that *publish stories about FSIs* but are *not operated by* them.
+8) Municipality or official pages that mention FSIs as part of a civic programme but are not run by the initiative.
+9) Short pages or external listings with little content or no organisational information should be excluded.
 
 Return STRICT JSON only (no extra text), with this schema:
 {
@@ -58,8 +65,14 @@ Keep "evidence_quotes" short (≤200 characters each). Use British English.
 """
 
 # ========= OpenAI client =========
-client = OpenAI()   # uses OPENAI_API_KEY env var
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError(
+        "❌ OPENAI_API_KEY not found. Please create a .env file in this directory containing:\n"
+        "OPENAI_API_KEY=sk-your-key-here"
+    )
 
+client = OpenAI(api_key=api_key)   # safely reads from .env file
 # ========= Helpers =========
 def find_txt_files(base: str) -> List[pathlib.Path]:
     # Looks for city subfolders, each containing many *.txt pages

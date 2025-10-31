@@ -6,12 +6,14 @@ import pandas as pd
 BASE_DIR = pathlib.Path(__file__).parent
 
 # ==== PATHS (edit if needed) ====
-RUN_DIR = BASE_DIR / "Run-03"
-SOURCE_DIR = RUN_DIR / "01--to-process"                     # where the original *_results.xlsx live
+
+
+RUN_DIR = BASE_DIR / "Run-03-2ndFilteringImproved" 
+SOURCE_DIR = BASE_DIR / "Run-03-2ndFiltering"                     # where the original *_results.xlsx live
 SCRAPED_BASE = SOURCE_DIR / "_scraped_text"                 # where _scraped_text/<City>/scrape_summary.csv live
-FILTER_CSV = RUN_DIR / "fsi_filter_results.csv"             # output from analyse_fsi_filter.py
-OUTPUT_XLSX = RUN_DIR / "FSI_included_combined.xlsx"        # final combined Excel
-OUTPUT_CSV = RUN_DIR / "FSI_included_combined.csv"          # optional CSV
+FILTER_CSV = RUN_DIR / "fsi_filter_results_improved.csv"              # output from analyse_fsi_filter.py
+OUTPUT_XLSX = RUN_DIR / "FSI_included_combined_improved.xlsx"        # final combined Excel
+OUTPUT_CSV = RUN_DIR / "FSI_included_combined_improved.csv"         # optional CSV
 
 # Target column order (create blanks for any missing columns)
 TARGET_COLS = [

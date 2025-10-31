@@ -1,7 +1,7 @@
 import pathlib
 
 # Correct folder containing your Excel files
-BASE_DIR = "/Users/hyunjicho/Documents/CULTIVATE_2nd_Filtering/Run-03/01--to-process"
+BASE_DIR = pathlib.Path(__file__).parent / "Run-03" / "01--to-process"
 
 def main():
     folder = pathlib.Path(BASE_DIR)

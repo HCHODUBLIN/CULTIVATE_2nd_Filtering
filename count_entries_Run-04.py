@@ -5,9 +5,9 @@ import pandas as pd
 BASE_DIR = pathlib.Path(__file__).parent
 
 # ===== FOLDERS =====
-DIR_FILTERED = BASE_DIR / "Run-03-2ndFiltering" / "2ndfiltered"  # 2nd filtering results
-DIR_ORIGINAL = BASE_DIR / "Run-03" / "03--archived"              # Before filtering
-DIR_VERIFIED = BASE_DIR / "Run-03" / "02--completed"             # Final verified
+DIR_FILTERED = BASE_DIR / "Run-04-2ndFiltering"  # 2nd filtering results
+DIR_ORIGINAL = BASE_DIR / "Run-04" / "01--to-process"              # Before filtering
+DIR_VERIFIED = BASE_DIR / "Run-04" / "02--completed"             # Final verified
 
 def count_rows_in_folder(folder: pathlib.Path) -> pd.DataFrame:
     """

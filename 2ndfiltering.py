@@ -10,7 +10,8 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
 # ====== CONFIG ======
-BASE_DIR = "/Users/hyunjicho/Documents/CULTIVATE_2nd_Filtering/Run-03/01--to-process"
+BASE_DIR = pathlib.Path(__file__).parent/ "Run-03" / "01--to-process"
+
 OUTPUT_BASE = os.path.join(BASE_DIR, "_scraped_text")
 
 REQUEST_TIMEOUT = 20
