@@ -4,25 +4,31 @@ import time
 import json
 import pathlib
 from typing import List, Dict, Any
+
 from openai import OpenAI, RateLimitError, APIError
 from dotenv import load_dotenv
+import argparse
 
-load_dotenv()  # .env 로드
+# ========= ENV & OpenAI client =========
+load_dotenv()  
 
-# ===== BASE DIRECTORY =====
-BASE_DIR = pathlib.Path(__file__).parent
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError(
+        "❌ OPENAI_API_KEY not found. Please create a .env file containing:\n"
+        "OPENAI_API_KEY=sk-your-key-here"
+    )
 
-# ========= CONFIG =========
-TXT_BASE = BASE_DIR / "Run-03-2ndFiltering" / "_scraped_text"
-OUTPUT_CSV = BASE_DIR / "Run-03-2ndFilteringImproved" / "fsi_filter_results_improved.csv"
+client = OpenAI(api_key=api_key)
 
-MODEL = "gpt-4o-mini"      # use 'gpt-4o' if you want maximum quality
-MAX_CHARS = 12000          # read up to this many chars per page (most sites fit)
+# ========= CONFIG  =========
+MODEL = "gpt-4o-mini"      
+MAX_CHARS_DEFAULT = 12000  
 MAX_RETRIES = 5
 BACKOFF_BASE = 2.0
-PAUSE_BETWEEN_FILES = 0.2
+PAUSE_DEFAULT = 0.2        
 
-# ========= PROMPT (British English, your exact criteria) =========
+# ========= PROMPT =========
 INSTRUCTIONS = """
 You are a careful research assistant. Classify each website TEXT as an FSI (Food Sharing Initiative) INCLUDE or EXCLUDE.
 
@@ -50,46 +56,35 @@ A website should not be classified as an FSI if:
 Return STRICT JSON only (no extra text), with this schema:
 {
   "decision": "include" | "exclude",
-  "confidence": 1..5,                               // 5 = very confident
-  "reasons": [string, ...],                         // concise bullet reasons
-  "evidence_quotes": [string, ...],                 // up to 3 short verbatim snippets from the TEXT that support the decision
-  "organisation_name": string | null,               // best guess from TEXT
+  "confidence": 1..5,
+  "reasons": [string, ...],
+  "evidence_quotes": [string, ...],
+  "organisation_name": string | null,
   "organisation_type": "food_bank" | "community_fridge" | "solidarity_kitchen" | "communal_garden" | "seed_library" | "food_club" | "social_supermarket" | "charity" | "cooperative" | "other" | null,
-  "is_ongoing": true | false | null,                // based on signals like regular opening hours, recurring activities
-  "site_owner_is_initiative": true | false | null,  // does the site appear to be the initiative’s own?
-  "notes": string                                   // brief clarifications (British English)
+  "is_ongoing": true | false | null,
+  "site_owner_is_initiative": true | false | null,
+  "notes": string
 }
 
 If information is unclear, choose the closest option and explain uncertainty in "notes".
 Keep "evidence_quotes" short (≤200 characters each). Use British English.
 """
 
-# ========= OpenAI client =========
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise RuntimeError(
-        "❌ OPENAI_API_KEY not found. Please create a .env file in this directory containing:\n"
-        "OPENAI_API_KEY=sk-your-key-here"
-    )
-
-client = OpenAI(api_key=api_key)   # safely reads from .env file
 # ========= Helpers =========
-def find_txt_files(base: str) -> List[pathlib.Path]:
-    # Looks for city subfolders, each containing many *.txt pages
-    return sorted(pathlib.Path(base).glob("*/*.txt"))
+def find_txt_files(base: pathlib.Path) -> List[pathlib.Path]:
+    """Find all txt files one level below base (city folders)."""
+    return sorted(base.glob("*/*.txt"))
 
 def read_page_sample(p: pathlib.Path, max_chars: int) -> str:
     text = p.read_text(encoding="utf-8", errors="ignore").strip()
     if len(text) <= max_chars:
         return text
-    # take the first max_chars; for very long pages this is usually enough to decide site ownership & purpose
     return text[:max_chars]
 
 def call_classifier(text: str) -> Dict[str, Any]:
-    last_err = None
+    last_err: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            # Ask for strict JSON output from the Chat Completions API
             resp = client.chat.completions.create(
                 model=MODEL,
                 messages=[
@@ -101,25 +96,64 @@ def call_classifier(text: str) -> Dict[str, Any]:
             )
             content = resp.choices[0].message.content
             return json.loads(content)
-        except (RateLimitError, APIError) as e:
+        except (RateLimitError, APIError, json.JSONDecodeError) as e:
             last_err = e
-            time.sleep((BACKOFF_BASE ** attempt) + 0.1 * attempt)
-        except json.JSONDecodeError as e:
-            # If the model returned something not valid JSON (rare due to response_format), retry once or twice
-            last_err = e
+            # simple backoff
             time.sleep((BACKOFF_BASE ** attempt) + 0.1 * attempt)
     raise RuntimeError(f"Classification failed after {MAX_RETRIES} retries; last error: {last_err}")
 
 # ========= Main =========
 def main():
-    files = find_txt_files(TXT_BASE)
-    if not files:
-        print(f"No .txt files found under: {TXT_BASE}")
+    parser = argparse.ArgumentParser(
+        description="Classify scraped FSI website texts using OpenAI."
+    )
+    parser.add_argument(
+        "--txt-base",
+        type=pathlib.Path,
+        required=True,
+        help="Root folder containing city subfolders with .txt files (e.g. Run-03-2ndFiltering/_scraped_text)",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=pathlib.Path,
+        required=True,
+        help="Path to output CSV file (will be created or overwritten).",
+    )
+    parser.add_argument(
+        "--max-chars",
+        type=int,
+        default=MAX_CHARS_DEFAULT,
+        help=f"Max characters to read from each page (default: {MAX_CHARS_DEFAULT}).",
+    )
+    parser.add_argument(
+        "--pause",
+        type=float,
+        default=PAUSE_DEFAULT,
+        help=f"Pause between files in seconds (default: {PAUSE_DEFAULT}).",
+    )
+
+    args = parser.parse_args()
+
+    txt_base: pathlib.Path = args.txt_base
+    output_csv: pathlib.Path = args.output_csv
+    max_chars: int = args.max_chars
+    pause_between: float = args.pause
+
+    if not txt_base.exists():
+        print(f"❌ Input folder not found: {txt_base}")
         return
 
-    print(f"Found {len(files)} text files. Writing results to:\n{OUTPUT_CSV}\n")
+    files = find_txt_files(txt_base)
+    if not files:
+        print(f"No .txt files found under: {txt_base}")
+        return
 
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+    # ensure output folder exists
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Found {len(files)} text files.")
+    print(f"Writing results to:\n{output_csv}\n")
+
+    with open(output_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow([
             "city",
@@ -133,16 +167,15 @@ def main():
             "site_owner_is_initiative",
             "reasons",
             "evidence_quotes",
-            "notes"
+            "notes",
         ])
 
         for p in files:
-            city = p.parent.name
-            url_id = p.stem  # host__hash from your scraping step
-            text = read_page_sample(p, MAX_CHARS)
+            city = p.parent.name          # folder name (city)
+            url_id = p.stem               # host__hash
+            text = read_page_sample(p, max_chars)
 
             if not text:
-                # Empty page fallback
                 result = {
                     "decision": "exclude",
                     "confidence": 3,
@@ -152,7 +185,7 @@ def main():
                     "organisation_type": None,
                     "is_ongoing": None,
                     "site_owner_is_initiative": None,
-                    "notes": "No content available."
+                    "notes": "No content available.",
                 }
             else:
                 result = call_classifier(text)
@@ -169,11 +202,11 @@ def main():
                 result.get("site_owner_is_initiative"),
                 " | ".join(result.get("reasons", []) or []),
                 " | ".join(result.get("evidence_quotes", []) or []),
-                result.get("notes", "")
+                result.get("notes", ""),
             ])
 
             print(f"✓ {city}: {p.name} → {result.get('decision')} (conf {result.get('confidence')})")
-            time.sleep(PAUSE_BETWEEN_FILES)
+            time.sleep(pause_between)
 
     print("\nDone.")
 
